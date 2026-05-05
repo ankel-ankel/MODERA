@@ -6,13 +6,7 @@ Work in progress.
 
 ## Datasets
 
-We follow the [LogHub](https://github.com/logpai/loghub) data scope. Window size 100 lines, chronological 80/20 train/test split.
-
-|  | BGL | HDFS_v1 | Liberty | Thunderbird |
-|---|---:|---:|---:|---:|
-| Train sequences | 37,707 | 460,048 | 40,000 | 79,996 |
-| Test sequences | 9,427 | 115,013 | 10,000 | 20,000 |
-| Anomaly types | 34 | 1 | 10 | 8 |
+The data being used can be found here: [LogHub](https://github.com/logpai/loghub)
 
 Download the structured CSVs from LogHub and place them under:
 
