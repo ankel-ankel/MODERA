@@ -21,7 +21,8 @@ TEST_CSV         = "data/BGL/test.csv"
 MODEL_PATH       = "models/ModernBERT-large"
 
 EPOCHS           = 10
-BATCH_SIZE       = 8
+BATCH_SIZE       = 4
+GRAD_ACCUM_STEPS = 2
 LR               = 5e-5
 MAX_TOKEN_LEN    = 1024
 SEED             = 42
@@ -111,6 +112,7 @@ def main():
         model, train_loader, test_loader, label2id, output_dir, device,
         epochs=EPOCHS, lr=LR, alpha_supcon=ALPHA_SUPCON,
         label_smoothing=LABEL_SMOOTHING, resume=resume,
+        grad_accum_steps=GRAD_ACCUM_STEPS,
         stable_adamw=STABLE_ADAMW,
         llrd=LLRD, llrd_decay=LLRD_DECAY,
         swa=SWA,
