@@ -21,7 +21,7 @@ Then run `python build_dataset.py` to generate the windowed train/test CSVs.
 
 ## Pretrained model
 
-Backbone: [`answerdotai/ModernBERT-large`](https://huggingface.co/answerdotai/ModernBERT-large) (395M params, 8K context, Apache 2.0).
+Backbone: [`answerdotai/ModernBERT-large`](https://huggingface.co/answerdotai/ModernBERT-large).
 
 Download via `huggingface-cli`:
 
