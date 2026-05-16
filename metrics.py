@@ -5,21 +5,17 @@ import numpy as np
 from sklearn.metrics import accuracy_score, f1_score, precision_score, recall_score
 
 
-def compute_classification_metrics(
+def compute_metrics(
     preds: np.ndarray,
     labels: np.ndarray,
     id2label: dict[int, str],
     normal_id: int,
 ) -> dict[str, Any]:
+    test_classes = sorted(set(labels.tolist()))
+
     out: dict[str, Any] = {
         "n_samples": len(labels),
         "accuracy": float(accuracy_score(labels, preds)),
-        "precision_macro": float(precision_score(labels, preds, average="macro", zero_division=0)),
-        "recall_macro": float(recall_score(labels, preds, average="macro", zero_division=0)),
-        "f1_macro": float(f1_score(labels, preds, average="macro", zero_division=0)),
-        "precision_weighted": float(precision_score(labels, preds, average="weighted", zero_division=0)),
-        "recall_weighted": float(recall_score(labels, preds, average="weighted", zero_division=0)),
-        "f1_weighted": float(f1_score(labels, preds, average="weighted", zero_division=0)),
     }
 
     pred_anom = (preds != normal_id).astype(int)
@@ -37,17 +33,16 @@ def compute_classification_metrics(
     out["pred_normal"] = int((pred_anom == 0).sum())
     out["pred_anomaly"] = int((pred_anom == 1).sum())
 
-    label_ids = sorted(set(labels.tolist()) | set(preds.tolist()))
-    p_arr = precision_score(labels, preds, average=None, labels=label_ids, zero_division=0)
-    r_arr = recall_score(labels, preds, average=None, labels=label_ids, zero_division=0)
-    f_arr = f1_score(labels, preds, average=None, labels=label_ids, zero_division=0)
+    p_arr = precision_score(labels, preds, average=None, labels=test_classes, zero_division=0)
+    r_arr = recall_score(labels, preds, average=None, labels=test_classes, zero_division=0)
+    f_arr = f1_score(labels, preds, average=None, labels=test_classes, zero_division=0)
     out["per_class"] = {
         id2label.get(i, f"class_{i}"): {
             "precision": float(p), "recall": float(r), "f1": float(f),
             "support_true": int((labels == i).sum()),
             "support_pred": int((preds == i).sum()),
         }
-        for i, p, r, f in zip(label_ids, p_arr, r_arr, f_arr)
+        for i, p, r, f in zip(test_classes, p_arr, r_arr, f_arr)
     }
     pred_types = Counter(id2label.get(int(p), f"class_{int(p)}") for p in preds if int(p) != normal_id)
     out["pred_type_counts"] = dict(pred_types.most_common())
@@ -94,7 +89,7 @@ def format_report(metrics: dict[str, Any], task_label: str) -> list[str]:
     if metrics.get("pred_type_counts"):
         lines += [
             "",
-            "  Predicted anomaly types (sorted by count)",
+            "  Predicted anomaly types",
             "  --------------------------------------------------------------",
         ]
         for cls, cnt in metrics["pred_type_counts"].items():

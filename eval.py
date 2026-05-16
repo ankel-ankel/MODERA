@@ -1,110 +1,102 @@
 import json
 from pathlib import Path
 
-import numpy as np
 import torch
 from torch.utils.data import DataLoader
+from tqdm import tqdm
 from transformers import AutoTokenizer, logging as hf_logging
 
 hf_logging.set_verbosity_error()
 
 ROOT = Path(__file__).resolve().parent
 
-from data_loader import LogADCollator, LogADDataset
-from metrics import format_report
-from model import ModernBERTForLogAD
-from trainer import evaluate
+from data_loader import LogCollator, LogDataset
+from metrics import compute_metrics, format_report
+from model import ModernBertClassifier
 
 
-DATASET        = "BGL"
-RUN            = "run1"
-CHECKPOINT     = "best"
-BATCH_SIZE     = 8
-MAX_TOKEN_LEN  = 1024
-JOIN_SEP       = " ;; "
-NUM_WORKERS    = 4
-PIN_MEMORY     = True
+DATASET       = "BGL"
+CKPT_PATH     = "runs/checkpoint3/checkpoint.pt"
+TEST_CSV      = "data/BGL/test.csv"
+MODEL_PATH    = "models/ModernBERT-large"
 
-SEED           = 42
-SMOKE_N        = None  # number of test samples for a quick eval; set to None to use the full test set
-
-MODEL_PATH     = "models/ModernBERT-large"
-ATTN_IMPL      = "sdpa"
-DTYPE          = "bfloat16"
-TEST_CSV_TPL   = "data/{dataset}/test.csv"
+BATCH_SIZE    = 16
+MAX_TOKEN_LEN = 1024
 
 
-def stratified_indices(labels, n_total, rng):
-    classes = np.unique(labels)
-    per = max(1, n_total // len(classes))
-    chosen = np.concatenate([
-        rng.choice(np.where(labels == c)[0], size=min(per, (labels == c).sum()), replace=False)
-        for c in classes
-    ])
-    if len(chosen) > n_total:
-        chosen = rng.choice(chosen, n_total, replace=False)
-    return chosen
+def next_run_dir(base, prefix="eval"):
+    base.mkdir(parents=True, exist_ok=True)
+    nums = [int(d.name[len(prefix):]) for d in base.iterdir()
+            if d.is_dir() and d.name.startswith(prefix) and d.name[len(prefix):].isdigit()]
+    out = base / f"{prefix}{(max(nums) + 1) if nums else 1}"
+    out.mkdir(parents=True, exist_ok=True)
+    return out
+
+
+@torch.no_grad()
+def evaluate(model, loader, device):
+    model.eval()
+    all_preds, all_labels = [], []
+    for batch in tqdm(loader, desc="eval", leave=False):
+        labels = batch.pop("labels")
+        inputs = {k: v.to(device) for k, v in batch.items()}
+        out = model(**inputs)
+        all_preds.append(out.logits.argmax(-1).cpu())
+        all_labels.append(labels)
+    return torch.cat(all_preds), torch.cat(all_labels)
 
 
 def main():
     if not torch.cuda.is_available():
         raise RuntimeError("CUDA required")
     device = torch.device("cuda:0")
-    dtype = {"bfloat16": torch.bfloat16, "float16": torch.float16, "float32": torch.float32}[DTYPE]
 
     model_path = ROOT / MODEL_PATH
-    ckpt_dir = ROOT / "checkpoints" / DATASET / RUN / CHECKPOINT
-    if not ckpt_dir.exists():
-        raise FileNotFoundError(ckpt_dir)
+    test_csv = ROOT / TEST_CSV
+    ckpt_path = ROOT / CKPT_PATH
+    if not ckpt_path.exists():
+        raise FileNotFoundError(ckpt_path)
 
-    label2id = json.loads((ckpt_dir / "label2id.json").read_text())
+    out_dir = next_run_dir(ROOT / "runs")
+
+    ckpt = torch.load(ckpt_path, map_location=device, weights_only=False)
+    state = ckpt["model"]
+    label2id = ckpt["label2id"]
+    cfg_meta = ckpt.get("config", {})
     id2label = {v: k for k, v in label2id.items()}
     normal_id = label2id.get("normal", 0)
-    cfg_meta = json.loads((ckpt_dir / "config.json").read_text())
-    attn = cfg_meta.get("attn_impl", ATTN_IMPL)
+    attn = cfg_meta.get("attn_impl", "sdpa")
+    pooling = cfg_meta.get("pooling", "mean")
 
-    print(f"eval {DATASET} <- {ckpt_dir}")
-    print(f"  K={len(label2id)} attn={attn}")
+    print(f"eval {DATASET} <- {ckpt_path}")
+    print(f"  K={len(label2id)} attn={attn} pooling={pooling} max_token={MAX_TOKEN_LEN}")
+    print(f"  out: {out_dir}")
 
-    test_csv = ROOT / TEST_CSV_TPL.format(dataset=DATASET)
-    test_ds = LogADDataset(str(test_csv))
-
-    if SMOKE_N is not None:
-        rng = np.random.default_rng(SEED)
-        idx = stratified_indices(test_ds.labels, SMOKE_N, rng)
-        test_ds.sequences = test_ds.sequences[idx]
-        test_ds.labels = test_ds.labels[idx]
-        print(f"  smoke: test={len(test_ds)}")
-
+    test_ds = LogDataset(str(test_csv))
     tokenizer = AutoTokenizer.from_pretrained(str(model_path))
-    collator = LogADCollator(
-        tokenizer=tokenizer, label2id=label2id,
-        max_token_len=MAX_TOKEN_LEN, join_sep=JOIN_SEP,
-    )
+    collator = LogCollator(tokenizer=tokenizer, label2id=label2id, max_token_len=MAX_TOKEN_LEN)
     test_loader = DataLoader(
         test_ds, batch_size=BATCH_SIZE, shuffle=False, collate_fn=collator,
-        num_workers=NUM_WORKERS, pin_memory=PIN_MEMORY, drop_last=False,
+        num_workers=4, pin_memory=True, drop_last=False,
     )
 
-    model = ModernBERTForLogAD(
-        str(model_path), num_labels=len(label2id),
-        attn_implementation=attn, dtype=dtype,
-    ).to(device)
-    state = torch.load(ckpt_dir / "model.pt", map_location=device, weights_only=True)
+    model = ModernBertClassifier(str(model_path), num_labels=len(label2id),
+                                pooling=pooling, attn_implementation=attn).to(device)
     model.load_state_dict(state)
 
-    metrics = evaluate(model, test_loader, device, id2label, normal_id)
+    preds, labels = evaluate(model, test_loader, device)
 
-    out_dir = ROOT / "results" / DATASET
+    metrics = compute_metrics(preds.numpy(), labels.numpy(), id2label, normal_id)
+    metrics["source_ckpt"] = CKPT_PATH
+
+    report = "\n".join(format_report(metrics, task_label=f"{DATASET} <- {CKPT_PATH}"))
     out_dir.mkdir(parents=True, exist_ok=True)
-    tag = f"{RUN}_{CHECKPOINT}"
-    report = "\n".join(format_report(metrics, task_label=f"{DATASET} {tag}"))
-    (out_dir / f"{tag}.txt").write_text(report)
-    (out_dir / f"{tag}.json").write_text(json.dumps(metrics, indent=2))
+    (out_dir / "report.txt").write_text(report)
+    (out_dir / "report.json").write_text(json.dumps(metrics, indent=2))
 
     print()
     print(report)
-    print(f"\nsaved -> {out_dir}/{tag}.txt , {out_dir}/{tag}.json")
+    print(f"\nsaved -> {out_dir}/report.txt , {out_dir}/report.json")
 
 
 if __name__ == "__main__":

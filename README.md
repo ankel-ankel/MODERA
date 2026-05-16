@@ -1,86 +1,42 @@
 # MODERA
 
-Multi-class log anomaly type prediction with ModernBERT.
+Binary log anomaly detection with ModernBERT-large. Work in progress.
 
-Work in progress.
+## Backbone
 
-## Datasets
-
-The data being used can be found here: [LogHub](https://github.com/logpai/loghub)
-
-Download the structured CSVs from LogHub and place them under:
-
-```
-data/BGL/BGL.log_structured.csv
-data/HDFS_v1/HDFS.log_structured.csv
-data/Liberty/liberty2_structured.csv
-data/Thunderbird/Thunderbird.log_structured.csv
-```
-
-Then run `python build_dataset.py` to generate the windowed train/test CSVs.
-
-## Pretrained model
-
-Backbone: [`answerdotai/ModernBERT-large`](https://huggingface.co/answerdotai/ModernBERT-large).
-
-Download via `huggingface-cli`:
+[`answerdotai/ModernBERT-large`](https://huggingface.co/answerdotai/ModernBERT-large) — 395M params, 8K context.
 
 ```bash
 huggingface-cli download answerdotai/ModernBERT-large --local-dir models/ModernBERT-large
 ```
 
-Or any HF snapshot method. Place the snapshot under `models/ModernBERT-large/`.
+## Datasets
 
-## File layout
-
-```
-MODERA/
-  build_dataset.py     # raw structured CSV -> windowed multi-class CSVs
-  train.py             # training entrypoint
-  eval.py              # evaluation on test split
-  data_loader.py       # Dataset, regex mask, balanced sampler, collator
-  losses.py            # SupConLoss, FocalLoss, CombinedLoss
-  metrics.py           # P/R/F1, report formatter
-  model.py             # ModernBERTForLogAD wrapper
-  trainer.py           # training loop with resume + early stopping
-  docs/                # session handoff notes
-```
+Structured CSVs from [LogHub](https://github.com/logpai/loghub) (BGL, HDFS_v1, Liberty, Thunderbird). Place under `data/{dataset}/{name}.log_structured.csv`.
 
 ## Setup
 
 ```bash
 python -m venv .venv
-.venv\Scripts\activate          # Windows
-# source .venv/bin/activate     # Linux/Mac
-
+.venv\Scripts\activate
 pip install -r requirements.txt
-pip install torch --index-url https://download.pytorch.org/whl/cu121   # adjust for your CUDA
+pip install torch --index-url https://download.pytorch.org/whl/cu121
 ```
 
 ## Usage
 
-### 1. Build the windowed CSVs
-
 ```bash
-python build_dataset.py
+python build_dataset.py     # raw structured CSV -> windowed train/test
+python train.py             # fine-tune ModernBERT-large
+python eval.py              # evaluate the trained checkpoint
 ```
 
-Slices each structured log into 100-line windows, splits them 80/20 by time, and saves `train.csv` and `test.csv` next to the source.
+Hyperparameters and dataset selection live as constants at the top of each script.
 
-### 2. Train
+## Results
 
-```bash
-python train.py
-```
+Best on BGL (test split, 9,427 sequences, 8.65% anomaly rate):
 
-Fine-tunes ModernBERT on the train split and saves checkpoints under `checkpoints/{dataset}/run{N}/`. The best epoch and final epoch are kept separately.
-
-### 3. Evaluate
-
-```bash
-python eval.py
-```
-
-Loads a checkpoint and writes a report (text + JSON) to `results/{dataset}/`.
-
-Each script keeps its knobs as plain constants at the top of the file — open it, change what you want, run it.
+|  | Precision | Recall | F1 | Accuracy |
+|---|---:|---:|---:|---:|
+| **MODERA** | **0.953** | **0.912** | **0.932** | **0.988** |

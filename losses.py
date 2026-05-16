@@ -3,6 +3,16 @@ import torch.nn as nn
 import torch.nn.functional as F
 
 
+def rdrop_kl(logits_a, logits_b):
+    log_pa = F.log_softmax(logits_a, dim=-1)
+    log_pb = F.log_softmax(logits_b, dim=-1)
+    pa = log_pa.exp()
+    pb = log_pb.exp()
+    kl_ab = F.kl_div(log_pa, pb, reduction="batchmean")
+    kl_ba = F.kl_div(log_pb, pa, reduction="batchmean")
+    return 0.5 * (kl_ab + kl_ba)
+
+
 class SupConLoss(nn.Module):
     def __init__(self, temperature=0.07):
         super().__init__()
@@ -30,41 +40,11 @@ class SupConLoss(nn.Module):
         return -(same_class * log_prob).sum(1)[valid].div(pos_count[valid]).mean()
 
 
-class FocalLoss(nn.Module):
-    def __init__(self, alpha=None, gamma=2.0, label_smoothing=0.0):
-        super().__init__()
-        self.alpha = alpha
-        self.gamma = gamma
-        self.label_smoothing = label_smoothing
-
-    def forward(self, logits, labels):
-        log_p = F.log_softmax(logits, dim=-1)
-        if self.label_smoothing > 0:
-            n = logits.size(-1)
-            target = torch.full_like(log_p, self.label_smoothing / (n - 1))
-            target.scatter_(-1, labels.unsqueeze(-1), 1.0 - self.label_smoothing)
-            ce = -(target * log_p).sum(dim=-1)
-        else:
-            ce = F.nll_loss(log_p, labels, reduction="none")
-        pt = log_p.gather(-1, labels.unsqueeze(-1)).squeeze(-1).exp()
-        loss = (1 - pt).pow(self.gamma) * ce
-        if self.alpha is not None:
-            loss = loss * self.alpha[labels]
-        return loss.mean()
-
-
 class CombinedLoss(nn.Module):
-    def __init__(self, alpha_supcon=0.1, supcon_temperature=0.07,
-                 class_weights=None, use_focal=False, focal_gamma=2.0,
-                 label_smoothing=0.0):
+    def __init__(self, alpha_supcon=0.1, supcon_temperature=0.07, label_smoothing=0.0):
         super().__init__()
         self.alpha_supcon = alpha_supcon
-        if use_focal:
-            self.cls_loss = FocalLoss(alpha=class_weights, gamma=focal_gamma,
-                                      label_smoothing=label_smoothing)
-        else:
-            self.cls_loss = nn.CrossEntropyLoss(weight=class_weights,
-                                                label_smoothing=label_smoothing)
+        self.cls_loss = nn.CrossEntropyLoss(label_smoothing=label_smoothing)
         self.supcon = SupConLoss(temperature=supcon_temperature)
 
     def forward(self, logits, embeddings, labels):

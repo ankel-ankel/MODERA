@@ -35,7 +35,7 @@ def mask_log(text):
     return _COMBINED.sub("<*>", text)
 
 
-class LogADDataset(Dataset):
+class LogDataset(Dataset):
     def __init__(self, csv_path):
         df = pd.read_csv(csv_path).dropna(subset=["Content"]).reset_index(drop=True)
         self.labels = df["Label"].astype(str).values
@@ -54,7 +54,7 @@ class LogADDataset(Dataset):
         return self.sequences[idx], self.labels[idx]
 
 
-def make_binary_balanced_sampler(labels, target_ratio=0.3):
+def balanced_sampler(labels, target_ratio=0.3):
     is_anom = (labels != "normal").astype(np.int64)
     n_anom = int(is_anom.sum())
     n_norm = len(labels) - n_anom
@@ -69,7 +69,7 @@ def make_binary_balanced_sampler(labels, target_ratio=0.3):
 
 
 @dataclass
-class LogADCollator:
+class LogCollator:
     tokenizer: object
     label2id: dict
     max_token_len: int = 1024

@@ -1,4 +1,3 @@
-from collections import Counter
 from pathlib import Path
 
 import pandas as pd
@@ -20,12 +19,11 @@ NORMAL_TOKEN = "-"
 
 
 def session_label(window_labels: list[str]) -> str:
-    counter = Counter(lbl for lbl in window_labels if lbl != NORMAL_TOKEN)
-    return counter.most_common(1)[0][0] if counter else "normal"
+    return "anomaly" if any(lbl != NORMAL_TOKEN for lbl in window_labels) else "normal"
 
 
 def fixed_size_windows(df: pd.DataFrame, window_size: int, step_size: int) -> pd.DataFrame:
-    contents, labels, lengths = [], [], []
+    contents, labels = [], []
     n = len(df)
     contents_arr = df["Content"].astype(str).values
     labels_arr = df["Label"].astype(str).values
@@ -33,8 +31,7 @@ def fixed_size_windows(df: pd.DataFrame, window_size: int, step_size: int) -> pd
         end = start + window_size
         contents.append(SEPARATOR.join(contents_arr[start:end]))
         labels.append(session_label(labels_arr[start:end].tolist()))
-        lengths.append(window_size)
-    return pd.DataFrame({"Content": contents, "Label": labels, "session_length": lengths})
+    return pd.DataFrame({"Content": contents, "Label": labels})
 
 
 def chronological_split(df: pd.DataFrame, train_ratio: float):
