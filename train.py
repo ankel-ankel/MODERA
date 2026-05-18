@@ -21,8 +21,8 @@ TEST_CSV         = "data/BGL/test.csv"
 MODEL_PATH       = "models/ModernBERT-large"
 
 EPOCHS           = 10
-BATCH_SIZE       = 4
-GRAD_ACCUM_STEPS = 2
+BATCH_SIZE       = 8
+GRAD_ACCUM_STEPS = 1
 LR               = 5e-5
 MAX_TOKEN_LEN    = 1024
 SEED             = 42
@@ -38,9 +38,7 @@ BALANCED_SAMPLER = True
 STABLE_ADAMW     = True
 LLRD             = True
 SWA              = True
-SEMA             = False
-SEMA_BETA        = 0.999
-R_DROP           = True
+R_DROP           = False
 RESUME_DIR       = None
 
 
@@ -77,7 +75,7 @@ def main():
     sampler_desc = f"balanced@{TARGET_RATIO}" if BALANCED_SAMPLER else "shuffle"
     print(f"train {DATASET} bs={BATCH_SIZE} ep={EPOCHS} lr={LR} "
           f"alpha_supcon={ALPHA_SUPCON} sampler={sampler_desc}")
-    print(f"  out: {output_dir}")
+    print(f"checkpoints saved to {output_dir}")
 
     train_ds = LogDataset(str(train_csv))
     test_ds = LogDataset(str(test_csv))
@@ -106,7 +104,8 @@ def main():
         num_workers=4, persistent_workers=False, pin_memory=True, drop_last=False,
     )
 
-    model = ModernBertClassifier(str(model_path), num_labels=len(label2id), pooling=POOLING_TYPE).to(device)
+    model = ModernBertClassifier(str(model_path), num_labels=len(label2id),
+                                  pooling=POOLING_TYPE).to(device)
 
     summary = train(
         model, train_loader, test_loader, label2id, output_dir, device,
@@ -116,7 +115,6 @@ def main():
         stable_adamw=STABLE_ADAMW,
         llrd=LLRD, llrd_decay=LLRD_DECAY,
         swa=SWA,
-        sema=SEMA, sema_beta=SEMA_BETA,
         r_drop=R_DROP, r_drop_alpha=R_DROP_ALPHA,
         extra_meta={
             "dataset": DATASET, "batch_size": BATCH_SIZE, "max_token_len": MAX_TOKEN_LEN,

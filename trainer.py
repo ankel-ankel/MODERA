@@ -16,7 +16,7 @@ from metrics import compute_metrics
 def llrd_param_groups(model, top_lr, decay, weight_decay):
     layer_ids = set()
     for name, _ in model.named_parameters():
-        m = re.search(r"encoder\.layers\.(\d+)\.", name)
+        m = re.search(r"encoder\.layers?\.(\d+)\.", name)
         if m:
             layer_ids.add(int(m.group(1)))
     num_layers = max(layer_ids) + 1 if layer_ids else 0
@@ -25,7 +25,7 @@ def llrd_param_groups(model, top_lr, decay, weight_decay):
     for name, p in model.named_parameters():
         if not p.requires_grad:
             continue
-        m = re.search(r"encoder\.layers\.(\d+)\.", name)
+        m = re.search(r"encoder\.layers?\.(\d+)\.", name)
         if m:
             depth_from_top = num_layers - 1 - int(m.group(1))
         elif name.startswith("classifier") or name.startswith("pool_attn"):
@@ -87,10 +87,8 @@ def train(
     log_every=50, resume=False, extra_meta=None,
     stable_adamw=False, llrd=False, llrd_decay=0.9,
     swa=False,
-    sema=False, sema_beta=0.999,
     r_drop=False, r_drop_alpha=5.0,
 ):
-    assert not (swa and sema), "SWA and SEMA are mutually exclusive"
     swa_last_k = max(1, epochs // 2)
     output_dir.mkdir(parents=True, exist_ok=True)
     id2label = {v: k for k, v in label2id.items()}
@@ -142,16 +140,11 @@ def train(
             "swa": swa,
             "swa_last_k": swa_last_k if swa else None,
             "swa_policy": "last_50%_of_epochs" if swa else None,
-            "sema": sema,
-            "sema_beta": sema_beta if sema else None,
             "r_drop": r_drop,
             "r_drop_alpha": r_drop_alpha if r_drop else None}
 
     swa_state = None
     swa_count = 0
-    ema_params = None
-    if sema:
-        ema_params = [p.detach().clone() for p in model.parameters() if p.requires_grad]
 
     metrics = None
     for epoch in range(start_epoch, epochs):
@@ -183,11 +176,6 @@ def train(
                 optimizer.step()
                 scheduler.step()
                 optimizer.zero_grad()
-                if sema:
-                    with torch.no_grad():
-                        params = [p for p in model.parameters() if p.requires_grad]
-                        torch._foreach_mul_(ema_params, sema_beta)
-                        torch._foreach_add_(ema_params, params, alpha=1.0 - sema_beta)
 
             for k, v in info.items():
                 running[k] += v
@@ -200,12 +188,6 @@ def train(
         avg = {k: v / max(1, n) for k, v in running.items()}
         elapsed = time.time() - t0
         print(f"ep {epoch+1}/{epochs} {elapsed:.0f}s cls={avg['cls']:.3f} supcon={avg['supcon']:.3f}")
-
-        if sema:
-            with torch.no_grad():
-                params = [p for p in model.parameters() if p.requires_grad]
-                for ema_p, p in zip(ema_params, params):
-                    p.data.copy_(ema_p.data)
 
         row = {
             "epoch": epoch + 1,

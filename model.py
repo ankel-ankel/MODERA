@@ -26,12 +26,25 @@ class AttentionPool(nn.Module):
 
 class ModernBertClassifier(nn.Module):
     def __init__(self, model_path, num_labels, pooling="mean",
-                 attn_implementation="sdpa", dtype=torch.bfloat16):
+                 attn_implementation=None, dtype=torch.bfloat16):
         super().__init__()
         config = AutoConfig.from_pretrained(model_path)
-        self.encoder = AutoModel.from_pretrained(
-            model_path, attn_implementation=attn_implementation, dtype=dtype,
-        )
+        if attn_implementation is None:
+            try:
+                self.encoder = AutoModel.from_pretrained(
+                    model_path, attn_implementation="sdpa", dtype=dtype,
+                )
+                attn_implementation = "sdpa"
+            except (ValueError, NotImplementedError):
+                self.encoder = AutoModel.from_pretrained(
+                    model_path, attn_implementation="eager", dtype=dtype,
+                )
+                attn_implementation = "eager"
+        else:
+            self.encoder = AutoModel.from_pretrained(
+                model_path, attn_implementation=attn_implementation, dtype=dtype,
+            )
+        self.attn_implementation = attn_implementation
         self.pooling = pooling
         if pooling == "attention":
             self.pool_attn = AttentionPool(config.hidden_size)
@@ -42,8 +55,8 @@ class ModernBertClassifier(nn.Module):
         self.classifier = nn.Linear(config.hidden_size, num_labels)
         self.num_labels = num_labels
 
-    def forward(self, input_ids, attention_mask):
-        out = self.encoder(input_ids=input_ids, attention_mask=attention_mask)
+    def forward(self, input_ids, attention_mask, **kwargs):
+        out = self.encoder(input_ids=input_ids, attention_mask=attention_mask, **kwargs)
         h = out.last_hidden_state
         if self.pooling == "attention":
             pooled = self.pool_attn(h, attention_mask)

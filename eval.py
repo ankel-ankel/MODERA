@@ -16,11 +16,11 @@ from model import ModernBertClassifier
 
 
 DATASET       = "BGL"
-CKPT_PATH     = "runs/checkpoint3/checkpoint.pt"
+CKPT_PATH     = "runs/checkpoint2/checkpoint.pt"
 TEST_CSV      = "data/BGL/test.csv"
 MODEL_PATH    = "models/ModernBERT-large"
 
-BATCH_SIZE    = 16
+BATCH_SIZE    = 32
 MAX_TOKEN_LEN = 1024
 
 
@@ -65,11 +65,10 @@ def main():
     cfg_meta = ckpt.get("config", {})
     id2label = {v: k for k, v in label2id.items()}
     normal_id = label2id.get("normal", 0)
-    attn = cfg_meta.get("attn_impl", "sdpa")
     pooling = cfg_meta.get("pooling", "mean")
 
     print(f"eval {DATASET} <- {ckpt_path}")
-    print(f"  K={len(label2id)} attn={attn} pooling={pooling} max_token={MAX_TOKEN_LEN}")
+    print(f"  K={len(label2id)} pooling={pooling} max_token={MAX_TOKEN_LEN}")
     print(f"  out: {out_dir}")
 
     test_ds = LogDataset(str(test_csv))
@@ -81,7 +80,7 @@ def main():
     )
 
     model = ModernBertClassifier(str(model_path), num_labels=len(label2id),
-                                pooling=pooling, attn_implementation=attn).to(device)
+                                pooling=pooling).to(device)
     model.load_state_dict(state)
 
     preds, labels = evaluate(model, test_loader, device)
