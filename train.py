@@ -22,7 +22,7 @@ MODEL_PATH       = "models/ModernBERT-large"
 
 EPOCHS           = 4
 BATCH_SIZE       = 4
-GRAD_ACCUM_STEPS = 2
+GRAD_ACCUM_STEPS = 4
 TEST_BATCH_SIZE  = 16
 LR               = 5e-5
 MAX_TOKEN_LEN    = 2048
