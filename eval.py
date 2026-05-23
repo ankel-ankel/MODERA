@@ -16,12 +16,12 @@ from model import ModernBertClassifier
 
 
 DATASET       = "BGL"
-CKPT_PATH     = "runs/checkpoint2/checkpoint.pt"
+CKPT_PATH     = "runs/checkpoint6/checkpoint.pt"
 TEST_CSV      = "data/BGL/test.csv"
 MODEL_PATH    = "models/ModernBERT-large"
 
-BATCH_SIZE    = 32
-MAX_TOKEN_LEN = 1024
+BATCH_SIZE    = 16
+MAX_TOKEN_LEN = 2048
 
 
 def next_run_dir(base, prefix="eval"):
