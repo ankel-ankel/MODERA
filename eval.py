@@ -16,7 +16,7 @@ from model import ModernBertClassifier
 
 
 DATASET       = "BGL"
-CKPT_PATH     = "runs/checkpoint6/checkpoint.pt"
+CKPT_PATH     = "runs/checkpoint1/checkpoint.pt"
 TEST_CSV      = "data/BGL/test.csv"
 MODEL_PATH    = "models/ModernBERT-large"
 
