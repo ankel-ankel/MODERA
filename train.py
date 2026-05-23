@@ -20,16 +20,17 @@ TRAIN_CSV        = "data/BGL/train.csv"
 TEST_CSV         = "data/BGL/test.csv"
 MODEL_PATH       = "models/ModernBERT-large"
 
-EPOCHS           = 10
-BATCH_SIZE       = 8
-GRAD_ACCUM_STEPS = 1
+EPOCHS           = 4
+BATCH_SIZE       = 4
+GRAD_ACCUM_STEPS = 2
+TEST_BATCH_SIZE  = 16
 LR               = 5e-5
-MAX_TOKEN_LEN    = 1024
+MAX_TOKEN_LEN    = 2048
 SEED             = 42
 
 ALPHA_SUPCON     = 0.5
 LABEL_SMOOTHING  = 0.1
-POOLING_TYPE     = "mean"
+POOLING_TYPE     = "attention"
 LLRD_DECAY       = 0.9
 TARGET_RATIO     = 0.4
 R_DROP_ALPHA     = 5.0
@@ -100,7 +101,7 @@ def main():
         drop_last=True, **loader_kw,
     )
     test_loader = DataLoader(
-        test_ds, batch_size=BATCH_SIZE, shuffle=False, collate_fn=collator,
+        test_ds, batch_size=TEST_BATCH_SIZE, shuffle=False, collate_fn=collator,
         num_workers=4, persistent_workers=False, pin_memory=True, drop_last=False,
     )
 

@@ -47,12 +47,13 @@ class ModernBertClassifier(nn.Module):
         self.attn_implementation = attn_implementation
         self.pooling = pooling
         if pooling == "attention":
-            self.pool_attn = AttentionPool(config.hidden_size)
+            self.pool_attn = AttentionPool(config.hidden_size).to(dtype=dtype)
+            cls_in = config.hidden_size
         elif pooling == "mean_max":
-            self.classifier = nn.Linear(2 * config.hidden_size, num_labels)
-            self.num_labels = num_labels
-            return
-        self.classifier = nn.Linear(config.hidden_size, num_labels)
+            cls_in = 2 * config.hidden_size
+        else:
+            cls_in = config.hidden_size
+        self.classifier = nn.Linear(cls_in, num_labels)
         self.num_labels = num_labels
 
     def forward(self, input_ids, attention_mask, **kwargs):
