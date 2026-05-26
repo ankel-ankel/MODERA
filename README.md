@@ -1,6 +1,6 @@
 # MODERA
 
-Binary log anomaly detection with ModernBERT-large. Work in progress.
+Binary log anomaly detection with ModernBERT-large.
 
 ## Backbone
 
@@ -35,8 +35,8 @@ Hyperparameters and dataset selection live as constants at the top of each scrip
 
 ## Results
 
-Best on BGL (test split, 9,427 sequences, 8.65% anomaly rate):
+BGL test split (9,427 windows, 8.65% anomaly rate):
 
-|  | Precision | Recall | F1 | Accuracy |
+| | Precision | Recall | F1 | Accuracy |
 |---|---:|---:|---:|---:|
-| **MODERA** | **0.953** | **0.912** | **0.932** | **0.988** |
+| **MODERA** | **0.9887** | **0.9693** | **0.9789** | **0.9964** |
