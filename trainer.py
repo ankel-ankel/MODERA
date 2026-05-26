@@ -32,7 +32,7 @@ def llrd_param_groups(model, top_lr, decay, weight_decay):
             depth_from_top = 0
         elif "embeddings" in name:
             depth_from_top = num_layers
-        elif "encoder.final_norm" in name or name.startswith("encoder.norm"):
+        elif "encoder.final_norm" in name:
             depth_from_top = 0
         else:
             depth_from_top = num_layers

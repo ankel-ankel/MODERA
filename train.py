@@ -21,7 +21,7 @@ TEST_CSV         = "data/BGL/test.csv"
 MODEL_PATH       = "models/ModernBERT-large"
 
 EPOCHS           = 4
-BATCH_SIZE       = 4
+BATCH_SIZE       = 2
 GRAD_ACCUM_STEPS = 4
 TEST_BATCH_SIZE  = 16
 LR               = 5e-5
