@@ -20,7 +20,7 @@ TRAIN_CSV        = "data/BGL/train.csv"
 TEST_CSV         = "data/BGL/test.csv"
 MODEL_PATH       = "models/ModernBERT-large"
 
-EPOCHS           = 4
+EPOCHS           = 10
 BATCH_SIZE       = 2
 GRAD_ACCUM_STEPS = 4
 TEST_BATCH_SIZE  = 16
