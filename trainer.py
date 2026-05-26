@@ -9,7 +9,7 @@ from torch.optim import AdamW
 from torch.optim.lr_scheduler import LambdaLR
 from tqdm import tqdm
 
-from losses import CombinedLoss, rdrop_kl
+from losses import CombinedLoss
 from metrics import compute_metrics
 
 
@@ -87,7 +87,6 @@ def train(
     log_every=50, resume=False, extra_meta=None,
     stable_adamw=False, llrd=False, llrd_decay=0.9,
     swa=False,
-    r_drop=False, r_drop_alpha=5.0,
 ):
     swa_last_k = max(1, epochs // 2)
     output_dir.mkdir(parents=True, exist_ok=True)
@@ -139,9 +138,7 @@ def train(
             "llrd_decay": llrd_decay if llrd else None,
             "swa": swa,
             "swa_last_k": swa_last_k if swa else None,
-            "swa_policy": "last_50%_of_epochs" if swa else None,
-            "r_drop": r_drop,
-            "r_drop_alpha": r_drop_alpha if r_drop else None}
+            "swa_policy": "last_50%_of_epochs" if swa else None}
 
     swa_state = None
     swa_count = 0
@@ -157,18 +154,8 @@ def train(
         for step, batch in enumerate(pbar):
             labels = batch.pop("labels").to(device)
             inputs = {k: v.to(device) for k, v in batch.items()}
-            if r_drop:
-                out_a = model(**inputs)
-                out_b = model(**inputs)
-                loss_a, info_a = loss_fn(out_a.logits, out_a.embeddings, labels)
-                loss_b, info_b = loss_fn(out_b.logits, out_b.embeddings, labels)
-                kl = rdrop_kl(out_a.logits, out_b.logits)
-                loss = 0.5 * (loss_a + loss_b) + r_drop_alpha * kl
-                info = {k: 0.5 * (info_a[k] + info_b[k]) for k in info_a}
-                info["total"] = loss.item()
-            else:
-                out = model(**inputs)
-                loss, info = loss_fn(out.logits, out.embeddings, labels)
+            out = model(**inputs)
+            loss, info = loss_fn(out.logits, out.embeddings, labels)
             (loss / grad_accum_steps).backward()
 
             if (step + 1) % grad_accum_steps == 0 or (step + 1) == len(train_loader):

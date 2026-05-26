@@ -33,13 +33,11 @@ LABEL_SMOOTHING  = 0.1
 POOLING_TYPE     = "attention"
 LLRD_DECAY       = 0.9
 TARGET_RATIO     = 0.4
-R_DROP_ALPHA     = 5.0
 
 BALANCED_SAMPLER = True
 STABLE_ADAMW     = True
 LLRD             = True
 SWA              = True
-R_DROP           = False
 RESUME_DIR       = None
 
 
@@ -116,7 +114,6 @@ def main():
         stable_adamw=STABLE_ADAMW,
         llrd=LLRD, llrd_decay=LLRD_DECAY,
         swa=SWA,
-        r_drop=R_DROP, r_drop_alpha=R_DROP_ALPHA,
         extra_meta={
             "dataset": DATASET, "batch_size": BATCH_SIZE, "max_token_len": MAX_TOKEN_LEN,
             "model_path": MODEL_PATH, "balanced_sampler": BALANCED_SAMPLER,

@@ -3,16 +3,6 @@ import torch.nn as nn
 import torch.nn.functional as F
 
 
-def rdrop_kl(logits_a, logits_b):
-    log_pa = F.log_softmax(logits_a, dim=-1)
-    log_pb = F.log_softmax(logits_b, dim=-1)
-    pa = log_pa.exp()
-    pb = log_pb.exp()
-    kl_ab = F.kl_div(log_pa, pb, reduction="batchmean")
-    kl_ba = F.kl_div(log_pb, pa, reduction="batchmean")
-    return 0.5 * (kl_ab + kl_ba)
-
-
 class SupConLoss(nn.Module):
     def __init__(self, temperature=0.07):
         super().__init__()
