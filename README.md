@@ -32,11 +32,3 @@ python eval.py              # evaluate the trained checkpoint
 ```
 
 Hyperparameters and dataset selection live as constants at the top of each script.
-
-## Results
-
-BGL test split (9,427 windows, 8.65% anomaly rate):
-
-| | Precision | Recall | F1 | Accuracy |
-|---|---:|---:|---:|---:|
-| **MODERA** | **0.9887** | **0.9693** | **0.9789** | **0.9964** |
