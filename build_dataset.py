@@ -1,19 +1,29 @@
 from pathlib import Path
 
+import numpy as np
 import pandas as pd
 
 ROOT = Path(__file__).resolve().parent
 
+# đường dẫn file log đã tách cột
 STRUCTURED_PATH = {
-    "BGL":         "data/BGL/BGL.log_structured.csv",
-    "Liberty":     "data/Liberty/liberty2_structured.csv",
-    "Thunderbird": "data/Thunderbird/Thunderbird.log_structured.csv",
+    "BGL":            "data/BGL/BGL.log_structured.csv",
+    "HDFS_v1":        "data/HDFS_v1/HDFS.log_structured.csv",
+    "Liberty":        "data/Liberty/liberty2_structured.csv",
+    "Liberty_random": "data/Liberty/liberty2_structured.csv",
+    "Thunderbird":    "data/Thunderbird/Thunderbird.log_structured.csv",
 }
 
+RANDOM_SPLIT = {"Liberty_random"}
+RANDOM_SPLIT_SEED = 42
+
 DATASETS_TO_BUILD = ["BGL", "Liberty", "Thunderbird"]
+# cắt cửa sổ và tỉ lệ chia, đổi ở đây
 WINDOW_SIZE  = 100
 STEP_SIZE    = 100
-TRAIN_RATIO  = 0.8
+TRAIN_RATIO  = 0.7
+VAL_RATIO    = 0.1
+TEST_RATIO   = 0.2
 SEPARATOR    = " ;-; "
 NORMAL_TOKEN = "-"
 
@@ -22,6 +32,7 @@ def session_label(window_labels: list[str]) -> str:
     return "anomaly" if any(lbl != NORMAL_TOKEN for lbl in window_labels) else "normal"
 
 
+# cắt cửa sổ 100 dòng, không chồng lấn
 def fixed_size_windows(df: pd.DataFrame, window_size: int, step_size: int) -> pd.DataFrame:
     contents, labels = [], []
     n = len(df)
@@ -34,9 +45,15 @@ def fixed_size_windows(df: pd.DataFrame, window_size: int, step_size: int) -> pd
     return pd.DataFrame({"Content": contents, "Label": labels})
 
 
-def chronological_split(df: pd.DataFrame, train_ratio: float):
-    cut = int(len(df) * train_ratio)
-    return df.iloc[:cut].reset_index(drop=True), df.iloc[cut:].reset_index(drop=True)
+def chronological_split(df: pd.DataFrame, train_ratio: float, val_ratio: float):
+    n = len(df)
+    cut_train = int(n * train_ratio)
+    cut_val = int(n * (train_ratio + val_ratio))
+    return (
+        df.iloc[:cut_train].reset_index(drop=True),
+        df.iloc[cut_train:cut_val].reset_index(drop=True),
+        df.iloc[cut_val:].reset_index(drop=True),
+    )
 
 
 def write_info(out_path: Path, df: pd.DataFrame) -> None:
@@ -64,15 +81,21 @@ def process_dataset(dataset: str) -> None:
     print(f"  lines={len(df):,}")
 
     windowed = fixed_size_windows(df, WINDOW_SIZE, STEP_SIZE)
-    train_df, test_df = chronological_split(windowed, TRAIN_RATIO)
-    print(f"  windows={len(windowed):,} -> train={len(train_df):,} test={len(test_df):,}")
+    if dataset in RANDOM_SPLIT:
+        rng = np.random.default_rng(RANDOM_SPLIT_SEED)
+        windowed = windowed.iloc[rng.permutation(len(windowed))].reset_index(drop=True)
+    train_df, val_df, test_df = chronological_split(windowed, TRAIN_RATIO, VAL_RATIO)
+    print(f"  windows={len(windowed):,} -> train={len(train_df):,} val={len(val_df):,} test={len(test_df):,}")
 
     out_dir = ROOT / "data" / dataset
+    out_dir.mkdir(parents=True, exist_ok=True)
     train_df.to_csv(out_dir / "train.csv", index=False)
+    val_df.to_csv(out_dir / "val.csv", index=False)
     test_df.to_csv(out_dir / "test.csv", index=False)
     write_info(out_dir / "train_info.txt", train_df)
+    write_info(out_dir / "val_info.txt", val_df)
     write_info(out_dir / "test_info.txt", test_df)
-    print(f"  types train={len(set(train_df['Label']))} test={len(set(test_df['Label']))}")
+    print(f"  types train={len(set(train_df['Label']))} val={len(set(val_df['Label']))} test={len(set(test_df['Label']))}")
 
 
 def main() -> None:

@@ -5,6 +5,7 @@ import numpy as np
 from sklearn.metrics import accuracy_score, f1_score, precision_score, recall_score
 
 
+# precision / recall / F1 cho lớp bất thường
 def compute_metrics(
     preds: np.ndarray,
     labels: np.ndarray,
@@ -49,6 +50,7 @@ def compute_metrics(
     return out
 
 
+# in báo cáo ra text
 def format_report(metrics: dict[str, Any], task_label: str) -> list[str]:
     n = metrics["n_samples"]
     n_norm = metrics["n_normal"]

@@ -8,7 +8,9 @@ from torch.utils.data import Dataset, WeightedRandomSampler
 
 
 LOG_SEP = " ;-; "
+JOIN_SEP = " ;; "
 
+# regex thay giá trị biến bằng placeholder
 _PATTERNS = [
     r"True", r"true", r"False", r"false",
     r"\b(zero|one|two|three|four|five|six|seven|eight|nine|ten|eleven|twelve|thirteen"
@@ -35,13 +37,20 @@ def mask_log(text):
     return _COMBINED.sub("<*>", text)
 
 
+# đọc csv, mask rồi tokenize sẵn
 class LogDataset(Dataset):
-    def __init__(self, csv_path):
+    def __init__(self, csv_path, tokenizer, max_token_len, join_sep=JOIN_SEP):
         df = pd.read_csv(csv_path).dropna(subset=["Content"]).reset_index(drop=True)
         self.labels = df["Label"].astype(str).values
-        self.sequences = np.empty(len(df), dtype=object)
-        for i, content in enumerate(df["Content"].values):
-            self.sequences[i] = [mask_log(m) for m in str(content).split(LOG_SEP)]
+
+        texts = [
+            join_sep.join(mask_log(m) for m in str(content).split(LOG_SEP))
+            for content in df["Content"].values
+        ]
+
+        enc = tokenizer(texts, max_length=max_token_len, truncation=True, padding=False)
+        self.input_ids = enc["input_ids"]
+        self.attention_mask = enc["attention_mask"]
 
         n_anom = int((self.labels != "normal").sum())
         n_types = len(np.unique(self.labels))
@@ -51,36 +60,48 @@ class LogDataset(Dataset):
         return len(self.labels)
 
     def __getitem__(self, idx):
-        return self.sequences[idx], self.labels[idx]
+        return {
+            "input_ids": self.input_ids[idx],
+            "attention_mask": self.attention_mask[idx],
+            "label": self.labels[idx],
+        }
 
 
-def balanced_sampler(labels, target_ratio=0.3):
+# lấy mẫu lại cho cân bằng lớp
+def balanced_sampler(labels, target_ratio=0.4, generator=None):
     is_anom = (labels != "normal").astype(np.int64)
     n_anom = int(is_anom.sum())
     n_norm = len(labels) - n_anom
     if n_anom == 0 or n_norm == 0:
-        return WeightedRandomSampler(torch.ones(len(labels)), num_samples=len(labels), replacement=True)
-    w_anom = target_ratio / n_anom
-    w_norm = (1 - target_ratio) / n_norm
+        return WeightedRandomSampler(
+            torch.ones(len(labels)), num_samples=len(labels), replacement=True,
+            generator=generator,
+        )
+    target_anom = target_ratio if n_anom < n_norm else 1.0 - target_ratio
+    w_anom = target_anom / n_anom
+    w_norm = (1 - target_anom) / n_norm
     weights = np.where(is_anom, w_anom, w_norm).astype(np.float32)
     return WeightedRandomSampler(
         torch.from_numpy(weights), num_samples=len(labels), replacement=True,
+        generator=generator,
     )
 
 
 @dataclass
+# pad theo batch, đổi nhãn chữ sang số
 class LogCollator:
     tokenizer: object
     label2id: dict
-    max_token_len: int = 1024
-    join_sep: str = " ;; "
 
     def __call__(self, batch):
-        texts = [self.join_sep.join(logs) for logs, _ in batch]
-        ids = [self.label2id.get(lbl, self.label2id.get("normal", 0)) for _, lbl in batch]
-        enc = self.tokenizer(
-            texts, return_tensors="pt", max_length=self.max_token_len,
-            padding=True, truncation=True,
+        unknown = {b["label"] for b in batch} - set(self.label2id)
+        if unknown:
+            raise KeyError(f"labels not in label2id (would be silently misclassified): {sorted(unknown)}")
+        ids = [self.label2id[b["label"]] for b in batch]
+        padded = self.tokenizer.pad(
+            {"input_ids": [b["input_ids"] for b in batch],
+             "attention_mask": [b["attention_mask"] for b in batch]},
+            return_tensors="pt",
         )
-        enc["labels"] = torch.tensor(ids, dtype=torch.long)
-        return enc
+        padded["labels"] = torch.tensor(ids, dtype=torch.long)
+        return padded
